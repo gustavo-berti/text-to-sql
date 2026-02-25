@@ -1,22 +1,44 @@
-from pydantic import BaseModel, Field, field_validator
+from abc import ABC, abstractmethod
+from pydantic import BaseModel, Field
 
-class DatabaseParameters(BaseModel):
-    dialect: str
-    database: str
-    host: str = Field(..., description="O endereço do servidor")
-    user: str | None = None
-    password: str | None = None
+class DatabaseParameters(BaseModel, ABC):
+    host: str = Field(..., description="Endereço do servidor")
+    database: str = Field(..., description="Nome do banco")
+    user: str = Field(..., min_length=1, description="Usuário do banco")
+    password: str = Field(default="", description="Senha do banco")
+    port: int = Field(..., gt=0, description="Porta de conexão")
 
-    @field_validator('dialect')
-    @classmethod
-    def validate_dialect(cls, v: str) -> str:
-        validos = ['postgresql', 'mysql', 'sqlite', 'oracle']
-        if v.lower() not in validos:
-            raise ValueError(
-                f"Dialeto '{v}' não suportado. Escolha entre: {validos}")
-        return v.lower()
+    @abstractmethod
+    def get_dialect_name(self) -> str:
+        pass
 
+    @abstractmethod
     def get_uri(self) -> str:
-        if self.dialect == "sqlite":
-            return f"sqlite:///{self.database}"
-        return f"{self.dialect}://{self.user}:{self.password}@{self.host}/{self.database}"
+        pass
+
+class PostgresParameters(DatabaseParameters):
+    port: int = 5432
+    
+    def get_dialect_name(self) -> str:
+        return "PostgreSQL"
+    
+    def get_uri(self) -> str:
+        return f"postgresql+psycopg2://{self.user}:{self.password}@{self.host}:{self.port}/{self.database}"
+
+class MySQLParameters(DatabaseParameters):
+    port: int = 3306
+    
+    def get_dialect_name(self) -> str:
+        return "MySQL"
+    
+    def get_uri(self) -> str:
+        return f"mysql+pymysql://{self.user}:{self.password}@{self.host}:{self.port}/{self.database}"
+
+class OracleParameters(DatabaseParameters):
+    port: int = 1521
+    
+    def get_dialect_name(self) -> str:
+        return "Oracle"
+    
+    def get_uri(self) -> str:
+        return f"oracle+oracledb://{self.user}:{self.password}@{self.host}:{self.port}/?service_name={self.database}"
