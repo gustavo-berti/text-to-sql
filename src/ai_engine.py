@@ -4,11 +4,16 @@ def generate_sql_query(question, schema, api_key):
     try:
         client = genai.Client(api_key=api_key)
         
+        bd_type = "MySQL"
+
         prompt = f"""
-        Você é um especialista em SQL. Converta a pergunta do usuário em uma consulta SQL válida baseada no schema fornecido.
+        Você é um especialista em SQL. Converta a pergunta do usuário em uma consulta SQL válida baseada no schema fornecido e no tipo de banco de dados informado.
 
         SCHEMA DO BANCO DE DADOS:
         {schema}
+
+        TIPO DE BANCO DE DADOS
+        {bd_type}
         
         PERGUNTA DO USUÁRIO:
         "{question}"
@@ -17,6 +22,8 @@ def generate_sql_query(question, schema, api_key):
         1. Retorne APENAS o código SQL puro.
         2. NÃO use markdown (sem ```sql ou ```). Apenas o texto da query.
         3. Não invente colunas.
+        4. Não responda com outras operações além de SELECT.
+        5. Caso seja identificado um pedido não condizente com SELECT, retorne uma mensagem de erro.
         """
 
         response = client.models.generate_content(
