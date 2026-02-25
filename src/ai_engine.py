@@ -1,9 +1,10 @@
 from google import genai
 
-def generate_sql_query(question, schema, api_key):
+
+def generate_sql_query(question, schema, api_key, current_dialect):
     try:
         client = genai.Client(api_key=api_key)
-        
+
         bd_type = "MySQL"
 
         prompt = f"""
@@ -30,9 +31,10 @@ def generate_sql_query(question, schema, api_key):
             model="gemini-3-flash-preview",
             contents=prompt
         )
-        
+
         if response.text:
-            clean_sql = response.text.replace("```sql", "").replace("```", "").strip()
+            clean_sql = response.text.replace(
+                "```sql", "").replace("```", "").strip()
             return clean_sql
         else:
             raise Exception("Erro: A IA não retornou texto.")
