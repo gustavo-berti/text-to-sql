@@ -8,6 +8,17 @@ class DatabaseParameters(BaseModel, ABC):
     password: str = Field(default="", description="Senha do banco")
     port: int = Field(..., gt=0, description="Porta de conexão")
 
+    @staticmethod
+    def make(dialect: str, **kwargs) -> "DatabaseParameters":
+        if dialect.lower() == "postgresql":
+            return PostgresParameters(**kwargs)
+        elif dialect.lower() == "mysql":
+            return MySQLParameters(**kwargs)
+        elif dialect.lower() == "oracle":
+            return OracleParameters(**kwargs)
+        else:
+            raise ValueError(f"Banco {dialect} desconhecido.")
+
     @abstractmethod
     def get_dialect_name(self) -> str:
         pass
