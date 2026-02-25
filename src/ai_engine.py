@@ -1,11 +1,11 @@
 from google import genai
 
-def generate_sql_query(question, schema, api_key):
+def generate_sql_query(question, schema, api_key, current_dialect):
     try:
         client = genai.Client(api_key=api_key)
         
         prompt = f"""
-        Você é um especialista em SQL. Converta a pergunta do usuário em uma consulta SQL válida baseada no schema fornecido.
+        Você é um especialista em {current_dialect}. Converta a pergunta do usuário em uma consulta SQL válida baseada no schema fornecido.
 
         SCHEMA DO BANCO DE DADOS:
         {schema}

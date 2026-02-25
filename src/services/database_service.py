@@ -1,5 +1,6 @@
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import Engine
+from src.models.database_parameters import DatabaseParameters
 import pandas as pd
 
 class DatabaseService:

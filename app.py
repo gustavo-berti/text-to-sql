@@ -1,67 +1,79 @@
 import streamlit as st
-from src.database import connect_db, get_schema, run_query
 from src.ai_engine import generate_sql_query
+from src.models.database_parameters import DatabaseParameters
+from src.services.database_service import DatabaseService
 
 # --- CABEÇALHO ---
 st.set_page_config(page_title="SQL Genius", layout="wide")
 
 # --- GERENCIAMENTO DE ESTADO ---
-if "db_engine" not in st.session_state:
-    st.session_state.db_engine = None
-if "db_schema" not in st.session_state:
-    st.session_state.db_schema = ""
+if "db_service" not in st.session_state:
+    st.session_state.db_service = DatabaseService()
 
 # --- BARRA LATERAL DE CONFIGURAÇÃO ---
 with st.sidebar:
-    st.title("🔌 Conexão (GenAI SDK)")
-    
+    st.title("🔌 Conexão")
+
+    db_type = st.selectbox("Banco", ["postgresql", "mysql", "oracle"])
+    host = st.text_input("Host", value="localhost")
+    database = st.text_input("Nome do Banco")
+    user = st.text_input("Usuário")
+    password = st.text_input("Senha", type="password")
+
     gemini_key = st.text_input("Google API Key", type="password")
-    db_uri = st.text_input("Database URI", value="sqlite:///meubanco.db")
-    
-    if st.button("Conectar ao Banco"):
-        if not db_uri:
-            st.error("Insira a URI do banco.")
-        else:
-            try:
-                engine = connect_db(db_uri)
-                st.session_state.db_engine = engine
-                st.session_state.db_schema = get_schema(engine)
-                st.success("Conectado!")
+
+    if st.button("Conectar"):
+        try:
+            config = {
+                "host": host,
+                "database": database,
+                "user": user,
+                "password": password
+            }
+
+            params = DatabaseParameters.make(db_type, **config)
+
+            if st.session_state.db_service.connect(params):
+                st.success(f"Conectado ao {params.get_dialect_name()}!")
+
                 with st.expander("Ver Schema"):
-                    st.code(st.session_state.db_schema)
-            except Exception as e:
-                st.error(f"Erro: {e}")
+                    st.code(st.session_state.db_service.get_schema())
+
+        except Exception as e:
+            st.error(f"Erro na conexão: {e}")
 
 # --- INTERFACE (PRINCIPAL) ---
 st.title("✨ SQL Genius")
 
-if not st.session_state.db_engine:
+# Verificamos se o serviço está conectado através da property que criamos
+if not st.session_state.db_service.is_connected:
     st.info("👈 Conecte-se ao banco na barra lateral para começar.")
 else:
-    question = st.text_area("Pergunta:", placeholder="Ex: Quais clientes fizeram pedidos hoje?")
+    question = st.text_area("Sua pergunta:", placeholder="Ex: Qual o total de vendas por mês?")
     
-    if st.button("Gerar SQL"):
+    if st.button("Gerar e Executar"):
         if not gemini_key:
-            st.warning("Insira a API Key na barra lateral.")
+            st.warning("Insira a API Key.")
         elif not question:
-            st.warning("Escreva uma pergunta.")
+            st.warning("Faça uma pergunta.")
         else:
-            with st.spinner("Pensando..."):
-                sql_result = generate_sql_query(question, st.session_state.db_schema, gemini_key)
+            with st.spinner("IA processando..."):
+                current_schema = st.session_state.db_service.get_schema()
+                current_dialect = st.session_state.db_service._params.get_dialect_name()
+                
+                sql_result = generate_sql_query(question, current_schema, gemini_key, current_dialect)
+                
+                st.subheader("Query Gerada")
                 st.code(sql_result, language="sql")
                 
-                st.subheader("1. Query Gerada")
-                
+                # 3. Executamos via Service
                 try:
-                    if "Erro" in sql_result and "SELECT" not in sql_result:
-                         st.error(sql_result)
+                    df = st.session_state.db_service.execute_query(sql_result)
+                    
+                    st.subheader("Resultado")
+                    if df.empty:
+                        st.warning("Nenhum dado encontrado.")
                     else:
-                        df = run_query(st.session_state.db_engine, sql_result)
-                        
-                        st.subheader("2. Resultado")
-                        if df.empty:
-                            st.warning("Consulta sem resultados.")
-                        else:
-                            st.dataframe(df)
+                        st.dataframe(df, use_container_width=True)
                 except Exception as e:
-                    st.error(f"Erro ao executar SQL: {e}")
+                    st.error(f"Erro ao executar no banco: {e}")
