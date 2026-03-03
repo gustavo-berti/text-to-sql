@@ -1,11 +1,11 @@
 from google import genai
 
 
-def generate_sql_query(question, schema, api_key, current_dialect):
+def generate_sql_query(question, schema, api_key, db_type):
     try:
         client = genai.Client(api_key=api_key)
 
-        bd_type = "MySQL"
+        bd_type = db_type.upper() if db_type else "GENERIC SQL"
 
         prompt = f"""
         Você é um especialista em SQL. Converta a pergunta do usuário em uma consulta SQL válida baseada no schema fornecido e no tipo de banco de dados informado.
