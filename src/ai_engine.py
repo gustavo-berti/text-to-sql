@@ -1,11 +1,11 @@
 from google import genai
 
 
-def generate_sql_query(question, schema, api_key, current_dialect):
+def generate_sql_query(question, schema, api_key, db_type):
     try:
         client = genai.Client(api_key=api_key)
 
-        bd_type = "MySQL"
+        bd_type = db_type.upper() if db_type else "GENERIC SQL"
 
         prompt = f"""
         Você é um especialista em SQL. Converta a pergunta do usuário em uma consulta SQL válida baseada no schema fornecido e no tipo de banco de dados informado.
@@ -25,6 +25,7 @@ def generate_sql_query(question, schema, api_key, current_dialect):
         3. Não invente colunas.
         4. Não responda com outras operações além de SELECT.
         5. Caso seja identificado um pedido não condizente com SELECT, retorne uma mensagem de erro.
+        6. Caso haja nomes de colunas iguais em 2 tabelas de uma query, utilize apelidos 'AS' para evitar confusão.
         """
 
         response = client.models.generate_content(
