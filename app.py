@@ -95,9 +95,8 @@ else:
         else:
             with st.spinner("IA processando..."):
                 current_schema = st.session_state.db_service.get_schema()
-                current_dialect = st.session_state.db_service._params.get_dialect_name()
                 
-                sql_result = generate_sql_query(question, current_schema, gemini_key, current_dialect)
+                sql_result = generate_sql_query(question, current_schema, gemini_key, db_type)
                 
                 st.subheader("Query Gerada")
                 st.code(sql_result, language="sql")
