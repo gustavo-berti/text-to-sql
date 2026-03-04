@@ -16,7 +16,7 @@ class LLMService(ABC):
     def generate_sql_query(self, question: str, schema: str, db_type: str) -> str:
         try:
             bd_type = db_type.upper() if db_type else "GENERIC SQL"
-            prompt = self._build_prompt(question, schema, bd_type)
+            prompt = self._build_first_prompt(question, schema, bd_type)
             response_text = self._call_model(prompt)
 
             if not response_text:
@@ -25,21 +25,63 @@ class LLMService(ABC):
 
         except Exception as e:
             raise Exception(f"Erro ao gerar SQL: {e}")
+        
+    def retry_sql_query_generate(self, question: str, schema: str, db_type: str, last_query: str, last_error: str):
+        try:
+            bd_type = db_type.upper() if db_type else "GENERIC SQL"
+            prompt = self._build_retry_prompt(question, schema, bd_type, last_query, last_error)
+            response_text = self._call_model(prompt)
 
-    def _build_prompt(self, question: str, schema: str, db_type: str) -> str:
+            if not response_text:
+                raise Exception("Erro: A IA não retornou texto.")
+            return self._clean_response(response_text)
+
+        except Exception as e:
+            raise Exception(f"Erro ao gerar SQL: {e}")
+        
+
+    def _build_first_prompt(self, question: str, schema: str, db_type: str) -> str:
         return f"""
         Você é um especialista em SQL. Converta a pergunta do usuário em uma consulta SQL válida baseada no schema fornecido e no tipo de banco de dados informado.
 
         SCHEMA DO BANCO DE DADOS:
         {schema}
 
-        TIPO DE BANCO DE DADOS
+        TIPO DE BANCO DE DADOS:
         {db_type}
         
         PERGUNTA DO USUÁRIO:
         "{question}"
         
         REGRAS ESTRITAS:
+        1. Retorne APENAS o código SQL puro.
+        2. NÃO use markdown (sem ```sql ou ```). Apenas o texto da query.
+        3. Não invente colunas, caso seja informada uma coluna inesistente, retorne uma mensagem de aviso.
+        4. Não responda com outras operações além de SELECT.
+        5. Caso seja identificado um pedido não condizente com SELECT, retorne uma mensagem de erro.
+        6. Caso haja nomes de colunas iguais em 2 tabelas de uma query, utilize apelidos 'AS' para evitar confusão.
+        """
+    
+    def _build_retry_prompt(self, question: str, schema: str, db_type: str, last_query: str, last_error: str) -> str:
+        return f"""
+        Você é um especialista em SQL e precisa corrigir uma solicitação de consulta de um usuário. Com base no erro anterior, na ultima query, no schema, no tipo do banco e nas regras para a próxima tentativa, tente novamente.
+
+        SCHEMA DO BANCO DE DADOS:
+        {schema}
+
+        TIPO DE BANCO DE DADOS:
+        {db_type}
+
+        PERGUNTA ORIGINAL:
+        "{question}"
+
+        QUERY ANTERIOR:
+        {last_query}
+
+        ERRO RETORNADO PELO BANCO:
+        {last_error}
+
+        REGRAS:
         1. Retorne APENAS o código SQL puro.
         2. NÃO use markdown (sem ```sql ou ```). Apenas o texto da query.
         3. Não invente colunas, caso seja informada uma coluna inesistente, retorne uma mensagem de aviso.

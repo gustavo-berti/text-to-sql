@@ -1,5 +1,6 @@
 import streamlit as st
 from src.services.llm_service import GeminiLLMService
+from src.services.orchestrator_service import OrchestratorService
 from src.models.database_parameters import DatabaseParameters
 from src.services.database_service import DatabaseService
 
@@ -110,19 +111,26 @@ else:
                 with st.spinner("IA processando..."):
                     current_schema = st.session_state.db_service.get_schema()
                     llm_service = GeminiLLMService(gemini_key)
-                    sql_result = llm_service.generate_sql_query(question, current_schema, db_type)
+
+                    orchestrator = OrchestratorService(
+                        llm_service,
+                        st.session_state.db_service,
+                        max_retries=2
+                    )
+
+                    response = orchestrator.run(question, current_schema, db_type)
                     
-                    st.subheader("Query Gerada")
-                    st.code(sql_result, language="sql")
-                    
-                    # 3. Executamos via Service
-                    try:
-                        df = st.session_state.db_service.execute_query(sql_result)
-                        
-                        st.subheader("Resultado")
-                        if df.empty:
+                    st.subheader("Query Final")
+                    st.code(response["query"], language="sql")
+
+                    if response["success"]:
+                        if response["result"].empty:
                             st.warning("Nenhum dado encontrado.")
                         else:
-                            st.dataframe(df, use_container_width=True)
-                    except Exception as e:
-                        st.error(_friendly_error_message(e, context="query"))
+                            st.dataframe(response["result"], use_container_width=True)
+
+                        if response["attempts"] > 0:
+                            st.info(f"Query corrigida após {response['attempts']} tentativas.")
+
+                    else:
+                        st.error("Não foi possível corrigir automaticamente a consulta.")
