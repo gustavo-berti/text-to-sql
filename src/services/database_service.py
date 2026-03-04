@@ -1,8 +1,17 @@
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import ProgrammingError, OperationalError
 from src.models.database_parameters import DatabaseParameters
 import pandas as pd
 import re
+import logging
+
+# Regista falhas de segurança e erros da IA num ficheiro oculto
+logging.basicConfig(
+    filename="security_audit.log",
+    level=logging.WARNING,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 class DatabaseService:
     def __init__(self):
@@ -44,15 +53,14 @@ class DatabaseService:
         Garante que apenas comandos de leitura (SELECT) sejam executados 
         e bloqueia operações destrutivas.
         """
-        # Remove espaços em branco do início e fim e converte para maiúsculo
         sql_clean = sql.strip().upper()
 
-        # 1. Validação Primária: A query OBRIGATORIAMENTE deve começar com SELECT
+        # 1. Validação Primária: Bloqueia tudo o que não for SELECT
         if not sql_clean.startswith("SELECT"):
+            logging.warning(f"Ataque bloqueado (Não é SELECT). Comando recebido: {sql}")
             raise ValueError("Operação negada: Apenas comandos de leitura (SELECT) são permitidos.")
 
-        # 2. Validação Secundária: Bloqueio de palavras-chave destrutivas
-        # Usamos regex \b para garantir que estamos buscando a palavra exata 
+        # 2. Validação Secundária: Bloqueia palavras-chave destrutivas (Regex)
         forbidden_keywords = [
             "DROP", "DELETE", "UPDATE", "INSERT", "ALTER", 
             "TRUNCATE", "REPLACE", "GRANT", "REVOKE", "MERGE"
@@ -60,6 +68,7 @@ class DatabaseService:
         
         for keyword in forbidden_keywords:
             if re.search(rf'\b{keyword}\b', sql_clean):
+                logging.warning(f"Ataque bloqueado (Palavra restrita '{keyword}'). Comando recebido: {sql}")
                 raise ValueError(f"Operação de segurança ativada: O comando restrito '{keyword}' não é permitido.")
 
         return sql
@@ -69,15 +78,30 @@ class DatabaseService:
             raise RuntimeError("Conecte-se a um banco primeiro.")
 
         try:
+            # A query passa pela camada de sanitização antes de ser executada
             safe_sql = self._sanitize_query(sql)
 
             with self._engine.connect() as conn:
                 return pd.read_sql(text(safe_sql), conn)
                 
         except ValueError as ve:
+            # Lança o erro de segurança para aparecer no ecrã (Streamlit)
             raise ve
+            
+        except ProgrammingError as pe:
+            # Tratamento essencial para IA: Captura alucinações de colunas ou sintaxe errada
+            logging.error(f"Alucinação da IA detetada (ProgrammingError): {sql} | Detalhe original: {pe}")
+            raise RuntimeError("A inteligência artificial gerou uma consulta inválida ou referenciou colunas inexistentes. Por favor, reformule a sua pergunta com mais clareza.")
+            
+        except OperationalError as oe:
+            # Captura falhas técnicas (ex: o banco caiu a meio da pesquisa)
+            logging.error(f"Erro de ligação (OperationalError): {oe}")
+            raise RuntimeError("A ligação com o banco de dados falhou durante a consulta. Verifique o servidor.")
+            
         except Exception as e:
-            raise RuntimeError(f"Erro na execução da consulta SQL: {e}")
+            # Rede de segurança final
+            logging.error(f"Erro inesperado: {e}")
+            raise RuntimeError("Ocorreu um erro inesperado ao processar os dados.")
 
     @property
     def is_connected(self) -> bool:
