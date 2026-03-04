@@ -42,7 +42,7 @@ class LLMService(ABC):
         REGRAS ESTRITAS:
         1. Retorne APENAS o código SQL puro.
         2. NÃO use markdown (sem ```sql ou ```). Apenas o texto da query.
-        3. Não invente colunas.
+        3. Não invente colunas, caso seja informada uma coluna inesistente, retorne uma mensagem de aviso.
         4. Não responda com outras operações além de SELECT.
         5. Caso seja identificado um pedido não condizente com SELECT, retorne uma mensagem de erro.
         6. Caso haja nomes de colunas iguais em 2 tabelas de uma query, utilize apelidos 'AS' para evitar confusão.
