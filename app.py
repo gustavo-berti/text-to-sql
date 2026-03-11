@@ -1,7 +1,13 @@
+import os
 import streamlit as st
+from dotenv import load_dotenv
 from src.services.llm_service import GeminiLLMService
 from src.models.database_parameters import DatabaseParameters
 from src.services.database_service import DatabaseService
+from src.services.history_service import HistoryService
+from src.repository.history_repository import HistoryRepository
+
+load_dotenv()
 
 if "db_service" not in st.session_state:
     st.session_state.db_service = DatabaseService()
@@ -12,6 +18,7 @@ if "explanation" not in st.session_state: st.session_state.explanation = None
 if "analysis" not in st.session_state: st.session_state.analysis = None
 if "llm_service" not in st.session_state: st.session_state.llm_service = None
 if "last_question" not in st.session_state: st.session_state.last_question = ""
+if "history_service" not in st.session_state:st.session_state.history_service = None
 
 def _friendly_error_message(exc: Exception, context: str = "geral") -> str:
     msg = str(exc).lower()
@@ -38,13 +45,13 @@ def _friendly_error_message(exc: Exception, context: str = "geral") -> str:
 
     return "Ocorreu um erro inesperado. Tente novamente."
 
+
 # --- CABEÇALHO ---
 st.set_page_config(page_title="SQL Genius", layout="wide")
 
 # --- BARRA LATERAL DE CONFIGURAÇÃO ---
 with st.sidebar:
     st.title("🔌 Conexão")
-
     db_type = st.selectbox("Banco", ["postgresql", "mysql", "oracle"])
     host = st.text_input("Host *", value="localhost")
     database = st.text_input("Nome do Banco *")
@@ -60,10 +67,12 @@ with st.sidebar:
                 "Usuário": user,
                 "Google API Key": gemini_key,
             }
-            faltando = [nome for nome, valor in obrigatorios.items() if not valor]
+            faltando = [nome for nome, valor in obrigatorios.items()
+                        if not valor]
 
             if faltando:
-                st.warning(f"Preencha os campos obrigatórios: {', '.join(faltando)}.")
+                st.warning(
+                    f"Preencha os campos obrigatórios: {', '.join(faltando)}.")
                 st.stop()
 
             config = {
@@ -75,12 +84,29 @@ with st.sidebar:
 
             params = DatabaseParameters.make(db_type, **config)
 
-            if st.session_state.db_service.connect(params): 
+            if st.session_state.db_service.connect(params):
                 st.success(f"Conectado ao {params.get_dialect_name()}!")
                 st.session_state.db_schema = st.session_state.db_service.get_schema()
 
         except Exception as e:
             st.error(_friendly_error_message(e, context="connection"))
+
+    st.divider()
+    st.subheader("📖 Banco de Histórico (MySQL)")
+
+    if st.button("Conectar ao Histórico"):
+        try:
+            repo = HistoryRepository(
+                host=os.getenv("HIST_HOST"),
+                user=os.getenv("HIST_USER"),
+                password=os.getenv("HIST_PASSWORD"),
+                database=os.getenv("HIST_DATABASE"),
+                port=os.getenv("HIST_PORT")
+            )
+            st.session_state.history_service = HistoryService(repo)
+            st.success("Histórico conectado!")
+        except Exception as e:
+            st.error(f"Falha ao conectar ao histórico: {e}")
 
 # --- INTERFACE (PRINCIPAL) ---
 st.title("✨ SQL Genius")
@@ -89,12 +115,14 @@ st.title("✨ SQL Genius")
 if not st.session_state.db_service.is_connected:
     st.info("👈 Conecte-se ao banco na barra lateral para começar.")
 else:
-    tab_query, tab_schema = st.tabs(["💬 Perguntar", "📊 Esquema"])
+    tab_query, tab_schema, tab_history = st.tabs(
+        ["💬 Perguntar", "📊 Esquema", "📖 Histórico"])
 
     with tab_query:
         st.subheader("Faça uma pergunta sobre seus dados")
-        question = st.text_area("Sua pergunta:", placeholder="Ex: Qual o total de vendas por mês?")
-        
+        question = st.text_area(
+            "Sua pergunta:", placeholder="Ex: Qual o total de vendas por mês?")
+
         if st.button("Gerar e Executar"):
             if not gemini_key:
                 st.warning("Insira a API Key.")
@@ -143,6 +171,6 @@ else:
     with tab_schema:
         st.subheader("Esquema do Banco")
         if st.session_state.db_schema:
-          st.code(st.session_state.db_schema)
+            st.code(st.session_state.db_schema)
         else:
-          st.warning("Não foi possível obter o esquema do banco.")
+            st.warning("Não foi possível obter o esquema do banco.")
