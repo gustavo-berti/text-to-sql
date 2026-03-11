@@ -1,9 +1,13 @@
+import os
 import streamlit as st
+from dotenv import load_dotenv
 from src.services.llm_service import GeminiLLMService
 from src.models.database_parameters import DatabaseParameters
 from src.services.database_service import DatabaseService
 from src.services.history_service import HistoryService
 from src.repository.history_repository import HistoryRepository
+
+load_dotenv()
 
 if "db_schema" not in st.session_state:
     st.session_state.db_schema = None
@@ -88,19 +92,15 @@ with st.sidebar:
 
     st.divider()
     st.subheader("📖 Banco de Histórico (MySQL)")
-    hist_host = st.text_input("Host",     value="localhost", key="hist_host")
-    hist_database = st.text_input(
-        "Database", value="text_to_sql_history", key="hist_db")
-    hist_user = st.text_input("Usuário",  key="hist_user")
-    hist_password = st.text_input("Senha",    type="password", key="hist_pass")
 
     if st.button("Conectar ao Histórico"):
         try:
             repo = HistoryRepository(
-                host=hist_host,
-                user=hist_user,
-                password=hist_password,
-                database=hist_database
+                host=os.getenv("HIST_HOST"),
+                user=os.getenv("HIST_USER"),
+                password=os.getenv("HIST_PASSWORD"),
+                database=os.getenv("HIST_DATABASE"),
+                port=os.getenv("HIST_PORT")
             )
             st.session_state.history_service = HistoryService(repo)
             st.success("Histórico conectado!")
