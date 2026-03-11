@@ -2,11 +2,13 @@ import streamlit as st
 from src.services.llm_service import GeminiLLMService
 from src.models.database_parameters import DatabaseParameters
 from src.services.database_service import DatabaseService
+from src.services.history_service import HistoryService
+from src.repository.history_repository import HistoryRepository
 
-if "db_service" not in st.session_state:
-    st.session_state.db_service = DatabaseService()
 if "db_schema" not in st.session_state:
     st.session_state.db_schema = None
+if "history_service" not in st.session_state:
+    st.session_state.history_service = None
 
 
 def _friendly_error_message(exc: Exception, context: str = "geral") -> str:
@@ -45,7 +47,6 @@ if "db_service" not in st.session_state:
 # --- BARRA LATERAL DE CONFIGURAÇÃO ---
 with st.sidebar:
     st.title("🔌 Conexão")
-
     db_type = st.selectbox("Banco", ["postgresql", "mysql", "oracle"])
     host = st.text_input("Host *", value="localhost")
     database = st.text_input("Nome do Banco *")
@@ -84,6 +85,27 @@ with st.sidebar:
 
         except Exception as e:
             st.error(_friendly_error_message(e, context="connection"))
+
+    st.divider()
+    st.subheader("📖 Banco de Histórico (MySQL)")
+    hist_host = st.text_input("Host",     value="localhost", key="hist_host")
+    hist_database = st.text_input(
+        "Database", value="text_to_sql_history", key="hist_db")
+    hist_user = st.text_input("Usuário",  key="hist_user")
+    hist_password = st.text_input("Senha",    type="password", key="hist_pass")
+
+    if st.button("Conectar ao Histórico"):
+        try:
+            repo = HistoryRepository(
+                host=hist_host,
+                user=hist_user,
+                password=hist_password,
+                database=hist_database
+            )
+            st.session_state.history_service = HistoryService(repo)
+            st.success("Histórico conectado!")
+        except Exception as e:
+            st.error(f"Falha ao conectar ao histórico: {e}")
 
 # --- INTERFACE (PRINCIPAL) ---
 st.title("✨ SQL Genius")
@@ -134,12 +156,34 @@ else:
                             st.warning("Nenhum dado encontrado.")
                         else:
                             st.dataframe(df, use_container_width=True)
+
+                        # Salva no histórico (se conectado)
+                        if st.session_state.history_service:
+                            st.session_state.history_service.record(
+                                database_name=database,
+                                question=question,
+                                generated_query=sql_result,
+                                df_result=df
+                            )
                     except Exception as e:
                         st.error(_friendly_error_message(e, context="query"))
 
     with tab_history:
         st.subheader("Histórico")
-        # nome do bd
-        # pergunta
-        # query
-        # resultado
+        if not st.session_state.history_service:
+            st.info("Conecte-se ao banco de histórico na barra lateral.")
+        else:
+            if st.button("🗑️ Limpar Histórico"):
+                st.session_state.history_service.clear()
+                st.success("Histórico limpo!")
+
+            entries = st.session_state.history_service.get_all()
+            if not entries:
+                st.info("Nenhuma consulta registrada ainda.")
+            else:
+                for entry in entries:
+                    with st.expander(f"🗄️ {entry.database_name} | {entry.created_at.strftime('%d/%m/%Y %H:%M')} — {entry.question[:60]}"):
+                        st.markdown(f"**Pergunta:** {entry.question}")
+                        st.code(entry.generated_query, language="sql")
+                        st.markdown("**Prévia do resultado:**")
+                        st.text(entry.result_preview)
