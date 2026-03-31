@@ -124,8 +124,8 @@ st.title("✨ SQL Genius")
 if not st.session_state.db_service.is_connected:
     st.info("👈 Conecte-se ao banco na barra lateral para começar.")
 else:
-    tab_query, tab_schema, tab_history = st.tabs(
-        ["💬 Perguntar", "📊 Esquema", "📖 Histórico"])
+    tab_query, tab_schema, tab_history, tab_arch = st.tabs(
+        ["💬 Perguntar", "📊 Esquema", "📖 Histórico", "🏗️ Arquitetura"])
 
     with tab_query:
         st.subheader("Faça uma pergunta sobre seus dados")
@@ -165,7 +165,16 @@ else:
                             )
 
                     except Exception as e:
-                        st.error(_friendly_error_message(e, context="query"))
+                        erro_str = str(e)
+                        if "503 UNAVAILABLE" in erro_str or "high demand" in erro_str:
+                            st.error("⏳ Os servidores da Inteligência Artificial estão sobrecarregados neste momento. Por favor, aguarde alguns segundos e tente novamente.")
+                        elif "Apenas comandos de leitura" in erro_str:
+                            st.error("🛡️ Bloqueado pelo Sistema de Segurança: A IA não gerou uma consulta SQL válida ou tentou uma operação proibida.")
+                            if 'sql_result' in locals():
+                                st.warning(f"O que a IA tentou executar:\n\n{sql_result}")
+                        else:
+                            st.error(f"Erro na execução: {erro_str}")
+
 
         if st.session_state.sql_result:
             st.subheader("Query Gerada")
@@ -217,3 +226,28 @@ else:
                         st.code(entry.generated_query, language="sql")
                         st.markdown("**Prévia do resultado:**")
                         st.text(entry.result_preview)
+
+    with tab_arch:
+            st.subheader("Arquiteto IA: Migração para Microsserviços")
+            st.markdown("Utilize a Inteligência Artificial para analisar a estrutura do seu banco de dados atual (Monólito) e receber uma proposta de arquitetura orientada a Microsserviços baseada em Domain-Driven Design (DDD).")
+            
+            if st.button("Gerar Proposta de Arquitetura"):
+                if not st.session_state.db_schema:
+                    st.warning("⚠️ É necessário conectar ao banco de dados para carregar o esquema primeiro.")
+                elif not gemini_key:
+                    st.warning("⚠️ Insira a sua Google API Key na barra lateral.")
+                else:
+                    with st.spinner("O Arquiteto IA está analisando o seu monólito. Isto pode demorar alguns segundos..."):
+                        try:
+                            if not st.session_state.llm_service:
+                                st.session_state.llm_service = GeminiLLMService(gemini_key)
+                            
+                            analysis_result = st.session_state.llm_service.analyze_microservices(st.session_state.db_schema)
+                            st.success("✅ Análise arquitetural concluída com sucesso!")
+                            st.markdown(analysis_result)
+                        except Exception as e:
+                            erro_str = str(e)
+                            if "503 UNAVAILABLE" in erro_str or "high demand" in erro_str:
+                                st.error("⏳ Os servidores da Inteligência Artificial estão sobrecarregados neste momento. Por favor, aguarde alguns segundos e tente novamente.")
+                            else:
+                                st.error(f"Erro Detalhado: {erro_str}")
