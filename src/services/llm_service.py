@@ -51,6 +51,10 @@ class LLMService(ABC):
     def _clean_response(self, text: str) -> str:
         return text.replace("```sql", "").replace("```", "").strip()
     
+    @abstractmethod
+    def analyze_microservices(self, schema: str) -> str:
+        pass    
+    
 
 from google import genai
 
@@ -95,3 +99,29 @@ class GeminiLLMService(LLMService):
             return response_text.strip()
         except Exception as e:
             raise Exception(f"Erro ao explicar resultados: {e}")
+        
+    def analyze_microservices(self, schema: str) -> str:
+        try:
+            prompt = f"""
+            Você é um Arquiteto de Software Sênior especialista em migração de sistemas monolíticos para microsserviços (Domain-Driven Design).
+            Abaixo está o schema do banco de dados relacional que representa o sistema monolítico atual:
+            
+            SCHEMA DO BANCO DE DADOS:
+            {schema}
+            
+            Sua tarefa:
+            Com base nas tabelas e relacionamentos apresentados, sugira uma divisão lógica deste sistema em Microsserviços (Bounded Contexts).
+            Para cada microsserviço sugerido, explique:
+            1. O nome do Microsserviço.
+            2. Quais tabelas (entidades) pertenceriam a ele.
+            3. Qual a justificativa técnica para essa divisão.
+            
+            Responda de forma clara, profissional e bem formatada em Markdown.
+            """
+            response_text = self._call_model(prompt)
+
+            if not response_text:
+                raise Exception("Erro: A IA não retornou texto.")
+            return response_text.strip()
+        except Exception as e:
+            raise Exception(f"Erro ao gerar análise de microsserviços: {e}")
