@@ -154,6 +154,16 @@ else:
                         st.session_state.sql_result = sql_result
                         st.session_state.df = df
                         st.session_state.last_question = question
+
+                        if st.session_state.history_service:
+                            db_name = st.session_state.db_service._params.database
+                            st.session_state.history_service.record(
+                                database_name=db_name,
+                                question=question,
+                                generated_query=sql_result,
+                                df_result=df
+                            )
+
                     except Exception as e:
                         st.error(_friendly_error_message(e, context="query"))
 
