@@ -42,8 +42,18 @@ class DatabaseService:
         schema_text = ""
         for table_name in inspector.get_table_names():
             schema_text += f"\nTabela: {table_name}\n"
+            
             for col in inspector.get_columns(table_name):
                 schema_text += f" - {col['name']} ({col['type']})\n"
+
+            fks = inspector.get_foreign_keys(table_name)
+            if fks:
+                schema_text += " Relacionamentos (Foreign Keys):\n"
+                for fk in fks:
+                    constrained_cols = ", ".join(fk['constrained_columns'])
+                    referred_table = fk['referred_table']
+                    referred_cols = ", ".join(fk['referred_columns'])
+                    schema_text += f"  -> A coluna '{constrained_cols}' referencia a tabela '{referred_table}' na coluna '{referred_cols}'\n"
 
         self._schema_cache = schema_text
         return schema_text
